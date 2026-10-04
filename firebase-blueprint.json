@@ -1,0 +1,77 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Perawat atau mahasiswa ners yang memiliki akun",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 256 },
+        "displayName": { "type": "string", "maxLength": 128 },
+        "institution": { "type": "string", "maxLength": 256 },
+        "nim": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "email"]
+    },
+    "Patient": {
+      "title": "Patient Record",
+      "description": "Data pasien KMB dengan inisial dan No RM",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "initials": { "type": "string", "maxLength": 32 },
+        "medicalRecordNumber": { "type": "string", "maxLength": 64 },
+        "room": { "type": "string", "maxLength": 64 },
+        "medicalDiagnosis": { "type": "string", "maxLength": 256 },
+        "status": { "type": "string", "enum": ["aktif", "pulang"], "maxLength": 16 },
+        "admissionDate": { "type": "string", "maxLength": 32 },
+        "assessmentDate": { "type": "string", "maxLength": 32 },
+        "cover": { "type": "object" },
+        "identity": { "type": "object" },
+        "history": { "type": "object" },
+        "domains": { "type": "object" },
+        "physicalExam": { "type": "object" },
+        "diagnostics": { "type": "object" },
+        "therapies": { "type": "array" },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "ownerId", "initials", "medicalRecordNumber"]
+    },
+    "CarePlan": {
+      "title": "Nursing Care Plan (AsKep)",
+      "description": "Rencana asuhan keperawatan 3S (analisa data, diagnosis SDKI, intervensi SLKI-SIKI, implementasi, evaluasi SOAP)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "patientId": { "type": "string", "maxLength": 128 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "analyses": { "type": "array" },
+        "diagnoses": { "type": "array" },
+        "interventions": { "type": "array" },
+        "implementations": { "type": "array" },
+        "evaluations": { "type": "array" },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "patientId", "ownerId"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Profil perawat atau mahasiswa ners"
+    },
+    "/patients/{patientId}": {
+      "schema": "Patient",
+      "description": "Data rekam asuhan keperawatan pasien milik perawat"
+    },
+    "/carePlans/{carePlanId}": {
+      "schema": "CarePlan",
+      "description": "Dokumentasi asuhan keperawatan pasien mencakup analisa, 3S, implementasi & evaluasi"
+    }
+  }
+}

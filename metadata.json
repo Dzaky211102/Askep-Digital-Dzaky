@@ -1,0 +1,6 @@
+{
+  "name": "AsKep 3S - Dokumentasi Keperawatan 13 Domain & SDKI SLKI SIKI",
+  "description": "Aplikasi digital Asuhan Keperawatan KMB model 13 Domain Doenges dengan standar 3S (SDKI, SLKI, SIKI PPNI), analisa data otomatis, jadwal shift WITA, dan ekspor Excel.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
