@@ -109,8 +109,9 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [remoteUpdateToast, setRemoteUpdateToast] = useState<string | null>(null);
   const [pendingMigrationCount, setPendingMigrationCount] = useState<number>(0);
 
-  // Debounce & Flush Refs
-  const saveDebounceTimeout = useRef<NodeJS.Timeout | null>(null);
+  // Debounce & Flush Refs (Separated to prevent mutual cancellation!)
+  const savePatientDebounceTimeout = useRef<NodeJS.Timeout | null>(null);
+  const saveCarePlanDebounceTimeout = useRef<NodeJS.Timeout | null>(null);
   const pendingPatientSave = useRef<Patient | null>(null);
   const pendingCarePlanSave = useRef<CarePlan | null>(null);
 
@@ -146,40 +147,41 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Flush pending debounced writes immediately to Firestore
   const flushPendingSaves = useCallback(async () => {
-    if (saveDebounceTimeout.current) {
-      clearTimeout(saveDebounceTimeout.current);
-      saveDebounceTimeout.current = null;
+    if (savePatientDebounceTimeout.current) {
+      clearTimeout(savePatientDebounceTimeout.current);
+      savePatientDebounceTimeout.current = null;
+    }
+    if (saveCarePlanDebounceTimeout.current) {
+      clearTimeout(saveCarePlanDebounceTimeout.current);
+      saveCarePlanDebounceTimeout.current = null;
     }
 
     if (!currentUser) return;
 
+    const promises: Promise<any>[] = [];
+
     if (pendingPatientSave.current) {
       const p = pendingPatientSave.current;
       pendingPatientSave.current = null;
-      try {
-        await setDoc(doc(db, 'patients', p.id), p, { merge: true });
-        setSyncStatus('saved');
-        setLastSyncTime(formatWitaClock());
-        setLastSyncError(null);
-      } catch (err: any) {
-        console.error('Flush patient save error:', err);
-        setSyncStatus('offline');
-        setLastSyncError(err?.message || 'Gagal menyimpan pasien ke cloud');
-      }
+      promises.push(setDoc(doc(db, 'patients', p.id), p, { merge: true }));
     }
 
     if (pendingCarePlanSave.current) {
       const cp = pendingCarePlanSave.current;
       pendingCarePlanSave.current = null;
+      promises.push(setDoc(doc(db, 'carePlans', cp.id), cp, { merge: true }));
+    }
+
+    if (promises.length > 0) {
       try {
-        await setDoc(doc(db, 'carePlans', cp.id), cp, { merge: true });
+        await Promise.all(promises);
         setSyncStatus('saved');
         setLastSyncTime(formatWitaClock());
         setLastSyncError(null);
       } catch (err: any) {
-        console.error('Flush carePlan save error:', err);
+        console.error('Flush save error:', err);
         setSyncStatus('offline');
-        setLastSyncError(err?.message || 'Gagal menyimpan rencana asuhan');
+        setLastSyncError(err?.message || 'Gagal menyimpan ke cloud');
       }
     }
   }, [currentUser]);
@@ -258,6 +260,23 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
           }
         });
 
+        // Ensure any locally added patients on this device get pushed to the cloud so all devices see them!
+        try {
+          const cachedStr = localStorage.getItem(`askep_patients_${currentUser.id}`);
+          if (cachedStr) {
+            const cachedList: Patient[] = JSON.parse(cachedStr);
+            for (const cp of cachedList) {
+              if (cp.deleted !== true && !cloudPatients.some(p => p.id === cp.id)) {
+                // Patient was created locally; push directly to Firestore now!
+                setDoc(doc(db, 'patients', cp.id), cp, { merge: true }).catch(console.warn);
+                cloudPatients.push(cp);
+              }
+            }
+          }
+        } catch {
+          // ignore
+        }
+
         if (cloudPatients.length > 0) {
           // Sort by updatedAt descending
           cloudPatients.sort((a, b) => {
@@ -267,6 +286,12 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
           });
 
           setPatients(cloudPatients);
+          try {
+            localStorage.setItem(`askep_patients_${currentUser.id}`, JSON.stringify(cloudPatients));
+          } catch {
+            // ignore
+          }
+
           setActivePatientId(prev => {
             if (prev && cloudPatients.some(p => p.id === prev)) return prev;
             return cloudPatients[0].id;
@@ -419,9 +444,9 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
     // Store in pending ref for flush
     pendingPatientSave.current = patientWithMetadata;
 
-    if (saveDebounceTimeout.current) clearTimeout(saveDebounceTimeout.current);
+    if (savePatientDebounceTimeout.current) clearTimeout(savePatientDebounceTimeout.current);
 
-    saveDebounceTimeout.current = setTimeout(async () => {
+    savePatientDebounceTimeout.current = setTimeout(async () => {
       try {
         await setDoc(doc(db, 'patients', patientWithMetadata.id), patientWithMetadata, { merge: true });
         pendingPatientSave.current = null;
@@ -459,9 +484,9 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     pendingCarePlanSave.current = carePlanWithMetadata;
 
-    if (saveDebounceTimeout.current) clearTimeout(saveDebounceTimeout.current);
+    if (saveCarePlanDebounceTimeout.current) clearTimeout(saveCarePlanDebounceTimeout.current);
 
-    saveDebounceTimeout.current = setTimeout(async () => {
+    saveCarePlanDebounceTimeout.current = setTimeout(async () => {
       try {
         await setDoc(doc(db, 'carePlans', carePlanWithMetadata.id), carePlanWithMetadata, { merge: true });
         pendingCarePlanSave.current = null;
@@ -748,11 +773,44 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
       updatedBy: studentName
     };
 
-    savePatient(newPatient);
-    saveCarePlan(newCarePlan);
+    // Immediate optimistic state update
+    setPatients(prev => [newPatient, ...prev.filter(p => p.id !== newPatient.id)]);
+    setCarePlans(prev => ({
+      ...prev,
+      [newCarePlan.patientId]: newCarePlan
+    }));
     setActivePatientId(id);
     setActiveStage(1);
     setCurrentFormStep(1);
+
+    // Save to local cache immediately
+    try {
+      const currentListStr = localStorage.getItem(`askep_patients_${currentUser?.id}`);
+      const currentList: Patient[] = currentListStr ? JSON.parse(currentListStr) : [];
+      const updatedList = [newPatient, ...currentList.filter(p => p.id !== newPatient.id)];
+      localStorage.setItem(`askep_patients_${currentUser?.id}`, JSON.stringify(updatedList));
+    } catch {
+      // ignore
+    }
+
+    // Direct immediate Firestore cloud write (guarantees both devices see the new patient instantly)
+    if (currentUser) {
+      setSyncStatus('saving');
+      Promise.all([
+        setDoc(doc(db, 'patients', newPatient.id), newPatient, { merge: true }),
+        setDoc(doc(db, 'carePlans', newCarePlan.id), newCarePlan, { merge: true })
+      ])
+        .then(() => {
+          setSyncStatus('saved');
+          setLastSyncTime(formatWitaClock());
+          setLastSyncError(null);
+        })
+        .catch(err => {
+          console.error('Direct new patient cloud write error:', err);
+          setSyncStatus('offline');
+          setLastSyncError('Gagal menyinkronkan pasien baru ke cloud.');
+        });
+    }
 
     return newPatient;
   };
@@ -829,11 +887,22 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
       deviceId: CURRENT_DEVICE_ID
     };
 
-    savePatient(seedWithUser);
-    saveCarePlan(seedCpWithUser);
+    setPatients([seedWithUser]);
+    setCarePlans({ [seedCpWithUser.patientId]: seedCpWithUser });
     setActivePatientId(seedWithUser.id);
     setActiveStage(1);
     setCurrentFormStep(1);
+
+    try {
+      localStorage.setItem(`askep_patients_${currentUser.id}`, JSON.stringify([seedWithUser]));
+    } catch {
+      // ignore
+    }
+
+    Promise.all([
+      setDoc(doc(db, 'patients', seedWithUser.id), seedWithUser, { merge: true }),
+      setDoc(doc(db, 'carePlans', seedCpWithUser.id), seedCpWithUser, { merge: true })
+    ]).catch(console.warn);
   };
 
   // Migrate old local data into current cloud account

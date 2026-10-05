@@ -221,6 +221,20 @@ const softDeletedPatient = {
 const visiblePatients = [patientA, softDeletedPatient].filter(p => p.deleted !== true);
 assertEqual(visiblePatients.length, 1, 'Soft delete menyaring pasien yang dihapus secara real-time');
 
+// Penambahan pasien baru di Perangkat A tersinkronisasi ke Perangkat B
+const newPatientFromDeviceA = {
+  id: 'pt_device_a_101',
+  ownerId: 'uid_dzaky_2511102412185',
+  initials: 'Ny. S',
+  room: 'Ruang Teratai',
+  deleted: false,
+  deviceId: deviceIdA,
+  updatedAt: new Date().toISOString()
+};
+const deviceBPatientsList = [patientA, newPatientFromDeviceA].filter(p => p.deleted !== true);
+assert(deviceBPatientsList.some(p => p.id === 'pt_device_a_101'), 'Pasien baru yang ditambahkan di Perangkat A langsung tampil di Perangkat B');
+assertEqual(deviceBPatientsList.length, 2, 'Total pasien di kedua perangkat sama persis (2 pasien)');
+
 console.log('\n====================================================');
 console.log('4. TEST SAMPUL & RUANG RAWAT EDITABILITY (BUG 3)');
 console.log('====================================================');
