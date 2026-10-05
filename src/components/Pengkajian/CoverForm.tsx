@@ -11,16 +11,16 @@ import { FileText, Sparkles, Building, User, GraduationCap, Bed, Stethoscope, Re
 export const CoverForm: React.FC = () => {
   const { activePatient, savePatient } = usePatients();
 
+  // Track if title is generated automatically or custom edited
+  const [isManualTitle, setIsManualTitle] = useState(false);
+
   if (!activePatient) return null;
 
   const cover = activePatient.cover;
-  const currentRoom = cover.room || activePatient.room || '';
-  const currentInitials = activePatient.initials || cover.title.split(' pada ')[1]?.split(' dengan ')[0] || 'Tn. J';
+  const currentRoom = cover?.room || activePatient.room || '';
+  const currentInitials = activePatient.initials || cover?.title?.split(' pada ')[1]?.split(' dengan ')[0] || 'Tn. J';
   const currentDiagnosis = activePatient.medicalDiagnosis || '';
-  const currentHospital = cover.hospital || 'RSUD Abdul Wahab Sjahranie';
-
-  // Track if title is generated automatically or custom edited
-  const [isManualTitle, setIsManualTitle] = useState(false);
+  const currentHospital = cover?.hospital || 'RSUD Abdul Wahab Sjahranie';
 
   // Helper to construct standard automatic title
   const generateStandardTitle = (
