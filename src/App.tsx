@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { PatientProvider, usePatients } from './context/PatientContext';
 import { Header } from './components/Header';
 import { StageNavigation } from './components/StageNavigation';
@@ -28,10 +28,20 @@ import { CalendarView } from './components/CalendarView';
 import { PrintReportModal } from './components/PrintReportModal';
 import { HelpDeploymentModal } from './components/HelpDeploymentModal';
 import { AuthSyncModal } from './components/AuthSyncModal';
+import { LoginGateView } from './components/Auth/LoginGateView';
+import { AdminAllowlistModal } from './components/Admin/AdminAllowlistModal';
+import { OldDataMigrationModal } from './components/Migration/OldDataMigrationModal';
 import { ShieldCheck, HeartHandshake } from 'lucide-react';
 
 const MainAppContent: React.FC = () => {
-  const { activeStage, currentFormStep, activePatient } = usePatients();
+  const { currentUser, loading } = useAuth();
+  const {
+    activeStage,
+    currentFormStep,
+    pendingMigrationCount,
+    importOldLocalData,
+    dismissMigration
+  } = usePatients();
 
   // Modals state
   const [patientListModalOpen, setPatientListModalOpen] = useState(false);
@@ -40,6 +50,24 @@ const MainAppContent: React.FC = () => {
   const [printModalOpen, setPrintModalOpen] = useState(false);
   const [helpModalOpen, setHelpModalOpen] = useState(false);
   const [syncModalOpen, setSyncModalOpen] = useState(false);
+  const [adminModalOpen, setAdminModalOpen] = useState(false);
+
+  // Authentication Gateway: Show loading screen or Login Gate
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white font-sans">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-9 h-9 border-3 border-teal-400 border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs text-slate-300 font-mono">Memuat Sistem AsKep 3S Digital...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // BUG 1 Gateway: if not logged in with official NIM, only show LoginGateView
+  if (!currentUser) {
+    return <LoginGateView />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans">
@@ -50,6 +78,7 @@ const MainAppContent: React.FC = () => {
         onOpenHelp={() => setHelpModalOpen(true)}
         onOpenPrint={() => setPrintModalOpen(true)}
         onOpenSyncModal={() => setSyncModalOpen(true)}
+        onOpenAdmin={() => setAdminModalOpen(true)}
       />
 
       {/* Main 6-Stage Stepper Navigation */}
@@ -97,7 +126,7 @@ const MainAppContent: React.FC = () => {
       <footer className="bg-slate-900 text-slate-400 text-xs py-6 border-t border-slate-800 mt-12 print:hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-4 text-center md:text-left">
           <div className="flex items-center gap-2">
-            <HeartHandshake className="w-5 h-5 text-teal-400 flex-shrink-0" />
+            <HeartHandshake className="w-5 h-5 text-teal-400 shrink-0" />
             <div>
               <p className="font-bold text-white">
                 AsKep 3S — Sistem Dokumentasi Keperawatan KMB Digital
@@ -149,6 +178,19 @@ const MainAppContent: React.FC = () => {
       <AuthSyncModal
         isOpen={syncModalOpen}
         onClose={() => setSyncModalOpen(false)}
+      />
+
+      <AdminAllowlistModal
+        isOpen={adminModalOpen}
+        onClose={() => setAdminModalOpen(false)}
+      />
+
+      {/* Migration Modal for Local Data */}
+      <OldDataMigrationModal
+        isOpen={pendingMigrationCount > 0}
+        localCount={pendingMigrationCount}
+        onConfirmImport={importOldLocalData}
+        onDismiss={dismissMigration}
       />
     </div>
   );

@@ -7,6 +7,7 @@ import React from 'react';
 import { usePatients } from '../../context/PatientContext';
 import { PatientIdentity, Gender } from '../../types/askep';
 import { User, ShieldAlert, Calendar, CheckSquare, Square, AlertCircle } from 'lucide-react';
+import { NumericInput } from '../Common/NumericInput';
 
 export const IdentityForm: React.FC = () => {
   const { activePatient, savePatient } = usePatients();
@@ -98,17 +99,13 @@ export const IdentityForm: React.FC = () => {
             <label className="block font-semibold text-slate-700 mb-1">
               Umur (Tahun)
             </label>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={identity.age === 0 || identity.age === undefined ? '' : identity.age}
-              onFocus={e => e.target.select()}
-              onChange={e => {
-                const cleaned = e.target.value.replace(/[^0-9]/g, '').replace(/^0+/, '');
-                handleChange('age', cleaned === '' ? '' : Number(cleaned));
-              }}
-              className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:outline-hidden text-slate-900"
+            <NumericInput
+              value={identity.age}
+              onChange={val => handleChange('age', val)}
+              allowDecimal={false}
+              max={150}
               placeholder="34"
+              className="py-2"
             />
           </div>
 

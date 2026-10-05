@@ -9,6 +9,7 @@ import { LabResult, RadiologyResult } from '../../types/askep';
 import { LAB_PRESETS, determineLabFlag, LabPresetItem } from '../../data/labPresets';
 import { formatWitaDateInput } from '../../utils/witaTime';
 import { FlaskConical, Plus, Trash2, ArrowUp, ArrowDown, Camera, Check } from 'lucide-react';
+import { NumericInput } from '../Common/NumericInput';
 
 export const DiagnosticsForm: React.FC = () => {
   const { activePatient, savePatient } = usePatients();
@@ -210,12 +211,12 @@ export const DiagnosticsForm: React.FC = () => {
                       />
                     </td>
                     <td className="p-2">
-                      <input
-                        type="text"
+                      <NumericInput
                         value={lab.result}
-                        onChange={e => handleUpdateLab(lab.id, { result: e.target.value })}
+                        onChange={val => handleUpdateLab(lab.id, { result: val })}
+                        allowDecimal={true}
                         placeholder="Nilai"
-                        className={`w-full px-2 py-1 bg-white border rounded font-mono font-bold ${
+                        className={`px-2 py-1 font-mono font-bold ${
                           lab.flag === 'high'
                             ? 'border-rose-400 text-rose-700 bg-rose-50/40'
                             : lab.flag === 'low'

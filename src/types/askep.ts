@@ -390,6 +390,10 @@ export interface Patient {
   therapies: MedicalTherapy[];
   createdAt: string;
   updatedAt: string;
+  deleted?: boolean;
+  deletedAt?: string;
+  updatedBy?: string;
+  deviceId?: string;
 }
 
 export interface CarePlan {
@@ -402,6 +406,19 @@ export interface CarePlan {
   evaluations: EvaluationSoap[];
   createdAt: string;
   updatedAt: string;
+  deleted?: boolean;
+  deletedAt?: string;
+  updatedBy?: string;
+  deviceId?: string;
+}
+
+export interface AllowedNimRecord {
+  nim: string;
+  name: string;
+  registered: boolean;
+  registeredAt?: string | null;
+  createdAt: string;
+  pinHash?: string;
 }
 
 export interface UserProfile {
@@ -410,4 +427,5 @@ export interface UserProfile {
   displayName: string;
   nim?: string;
   institution?: string;
+  role?: 'student' | 'admin';
 }

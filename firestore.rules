@@ -20,9 +20,26 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == '2511102412185@askep.local' ||
+        request.auth.token.email == 'gform9588@gmail.com'
+      );
+    }
+
     // Connection test doc (used during startup verification)
     match /test/{testId} {
-      allow read, write: if isSignedIn() && isValidId(testId);
+      allow read, write: if true;
+    }
+
+    // Allowed NIMs collection (Allowlist of official nursing students)
+    match /allowed_nims/{nim} {
+      // Anyone can check if their NIM is allowed to register/login
+      allow read: if true;
+      // Admin can add or remove NIMs
+      allow create, delete: if isAdmin() && isValidId(nim);
+      // Admin or signed in user updating registered status
+      allow update: if (isAdmin() || isSignedIn()) && isValidId(nim);
     }
 
     // Users collection

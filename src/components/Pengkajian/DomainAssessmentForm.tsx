@@ -24,6 +24,7 @@ import {
   ChevronDown,
   ChevronUp
 } from 'lucide-react';
+import { NumericInput, parseClinicalNumber } from '../Common/NumericInput';
 
 export const DOMAIN_CHECKLIST_PRESETS: Record<string, string[]> = {
   neurosensori: [
@@ -353,117 +354,88 @@ export const DomainAssessmentForm: React.FC = () => {
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 text-xs">
           <div>
             <label className="block font-medium text-slate-600 mb-1">TD Sistolik (mmHg)</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={getDisplayValue(ttv.bloodPressureSystolic)}
-              onFocus={e => e.target.select()}
-              onChange={e => handleTtvChange('bloodPressureSystolic', e.target.value)}
+            <NumericInput
+              value={ttv.bloodPressureSystolic}
+              onChange={val => handleTtvChange('bloodPressureSystolic', val)}
+              allowDecimal={false}
               placeholder="120"
-              className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-bold text-slate-900"
+              warningRange={{ min: 90, max: 140, message: 'TD Sistolik di luar normal (90-140 mmHg)' }}
             />
           </div>
 
           <div>
             <label className="block font-medium text-slate-600 mb-1">TD Diastolik (mmHg)</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={getDisplayValue(ttv.bloodPressureDiastolic)}
-              onFocus={e => e.target.select()}
-              onChange={e => handleTtvChange('bloodPressureDiastolic', e.target.value)}
+            <NumericInput
+              value={ttv.bloodPressureDiastolic}
+              onChange={val => handleTtvChange('bloodPressureDiastolic', val)}
+              allowDecimal={false}
               placeholder="80"
-              className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-bold text-slate-900"
+              warningRange={{ min: 60, max: 90, message: 'TD Diastolik di luar normal (60-90 mmHg)' }}
             />
           </div>
 
           <div>
             <label className="block font-medium text-slate-600 mb-1">Frekuensi Nadi (x/m)</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={getDisplayValue(ttv.heartRate)}
-              onFocus={e => e.target.select()}
-              onChange={e => handleTtvChange('heartRate', e.target.value)}
+            <NumericInput
+              value={ttv.heartRate}
+              onChange={val => handleTtvChange('heartRate', val)}
+              allowDecimal={false}
               placeholder="80"
-              className={`w-full px-2.5 py-1.5 bg-white border rounded-xl font-bold ${
-                parseClinicalNumber(ttv.heartRate) > 100 || (parseClinicalNumber(ttv.heartRate) > 0 && parseClinicalNumber(ttv.heartRate) < 60)
-                  ? 'border-amber-400 text-amber-700'
-                  : 'border-slate-300 text-slate-900'
-              }`}
+              warningRange={{ min: 60, max: 100, message: 'Nadi di luar normal (60-100 x/m)' }}
             />
           </div>
 
           <div>
             <label className="block font-medium text-slate-600 mb-1">Pernapasan RR (x/m)</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={getDisplayValue(ttv.respiratoryRate)}
-              onFocus={e => e.target.select()}
-              onChange={e => handleTtvChange('respiratoryRate', e.target.value)}
+            <NumericInput
+              value={ttv.respiratoryRate}
+              onChange={val => handleTtvChange('respiratoryRate', val)}
+              allowDecimal={false}
               placeholder="20"
-              className={`w-full px-2.5 py-1.5 bg-white border rounded-xl font-bold ${
-                parseClinicalNumber(ttv.respiratoryRate) > 24
-                  ? 'border-amber-400 text-amber-700'
-                  : 'border-slate-300 text-slate-900'
-              }`}
+              warningRange={{ min: 12, max: 24, message: 'RR di luar normal (12-24 x/m)' }}
             />
           </div>
 
           <div>
             <label className="block font-medium text-slate-600 mb-1">Suhu Tubuh (°C)</label>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={getDisplayValue(ttv.temperature)}
-              onFocus={e => e.target.select()}
-              onChange={e => handleTtvChange('temperature', e.target.value)}
-              placeholder="36.5"
-              className={`w-full px-2.5 py-1.5 bg-white border rounded-xl font-bold ${
-                parseClinicalNumber(ttv.temperature) > 37.5
-                  ? 'border-rose-400 text-rose-700'
-                  : 'border-slate-300 text-slate-900'
-              }`}
+            <NumericInput
+              value={ttv.temperature}
+              onChange={val => handleTtvChange('temperature', val)}
+              allowDecimal={true}
+              placeholder="36,5"
+              warningRange={{ min: 36.0, max: 37.5, message: 'Suhu di luar normal (36.0 - 37.5 °C)' }}
             />
           </div>
 
           <div>
             <label className="block font-medium text-slate-600 mb-1">SpO2 (%)</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={getDisplayValue(ttv.spO2)}
-              onFocus={e => e.target.select()}
-              onChange={e => handleTtvChange('spO2', e.target.value)}
+            <NumericInput
+              value={ttv.spO2}
+              onChange={val => handleTtvChange('spO2', val)}
+              allowDecimal={false}
+              max={100}
               placeholder="98"
-              className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-bold text-teal-700"
+              warningRange={{ min: 95, max: 100, message: 'SpO2 rendah (< 95%)' }}
             />
           </div>
 
           <div>
             <label className="block font-medium text-slate-600 mb-1">BB (kg)</label>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={getDisplayValue(ttv.weightKg)}
-              onFocus={e => e.target.select()}
-              onChange={e => handleTtvChange('weightKg', e.target.value)}
+            <NumericInput
+              value={ttv.weightKg}
+              onChange={val => handleTtvChange('weightKg', val)}
+              allowDecimal={true}
               placeholder="60"
-              className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-bold text-slate-800"
             />
           </div>
 
           <div>
             <label className="block font-medium text-slate-600 mb-1">TB (cm)</label>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={getDisplayValue(ttv.heightCm)}
-              onFocus={e => e.target.select()}
-              onChange={e => handleTtvChange('heightCm', e.target.value)}
+            <NumericInput
+              value={ttv.heightCm}
+              onChange={val => handleTtvChange('heightCm', val)}
+              allowDecimal={true}
               placeholder="165"
-              className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-bold text-slate-800"
             />
           </div>
         </div>

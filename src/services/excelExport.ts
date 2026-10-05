@@ -17,6 +17,17 @@ function sanitizeSheetName(name: string, fallback: string): string {
 }
 
 /**
+ * Convert clinical string/number to clean Excel number or empty string
+ */
+function toExcelNumber(val: any): number | string {
+  if (val === undefined || val === null || val === '') return '';
+  if (typeof val === 'number') return isNaN(val) ? '' : val;
+  const str = String(val).replace(',', '.').trim();
+  const num = parseFloat(str);
+  return isNaN(num) ? String(val) : num;
+}
+
+/**
  * Auto-fit column widths based on cell content lengths.
  */
 function autoFitColumns(rows: any[][]): XLSX.ColInfo[] {
@@ -71,12 +82,12 @@ export function exportPatientsToExcel(patients: Patient[], carePlansMap: Record<
       p.status.toUpperCase(),
       p.admissionDate || '-',
       p.assessmentDate || '-',
-      `${p.domains.vitalSigns.bloodPressureSystolic}/${p.domains.vitalSigns.bloodPressureDiastolic}`,
-      p.domains.vitalSigns.heartRate,
-      p.domains.vitalSigns.respiratoryRate,
-      p.domains.vitalSigns.temperature,
-      p.domains.painAssessment.severityScale,
-      p.domains.morseFallScale.totalScore,
+      `${p.domains.vitalSigns.bloodPressureSystolic || '-'}/${p.domains.vitalSigns.bloodPressureDiastolic || '-'}`,
+      toExcelNumber(p.domains.vitalSigns.heartRate),
+      toExcelNumber(p.domains.vitalSigns.respiratoryRate),
+      toExcelNumber(p.domains.vitalSigns.temperature),
+      toExcelNumber(p.domains.painAssessment.severityScale),
+      toExcelNumber(p.domains.morseFallScale.totalScore),
       p.domains.morseFallScale.riskCategory,
       cp?.diagnoses?.length || 0,
       cp?.implementations?.length || 0
@@ -193,7 +204,7 @@ export function exportPatientsToExcel(patients: Patient[], carePlansMap: Record<
         i + 1,
         lab.date,
         lab.testName,
-        lab.result,
+        toExcelNumber(lab.result),
         lab.unit,
         lab.normalRange,
         lab.flag === 'high' ? 'TINGGI (↑)' : lab.flag === 'low' ? 'RENDAH (↓)' : 'NORMAL'

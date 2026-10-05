@@ -4,24 +4,24 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { formatWitaClock, getWitaDate, getCurrentShift, getShiftLabel } from '../utils/witaTime';
+import { formatWitaClock, getCurrentShift, getShiftLabel } from '../utils/witaTime';
 import { usePatients } from '../context/PatientContext';
 import { useAuth } from '../context/AuthContext';
 import {
   Clock,
-  CloudCheck,
   RefreshCw,
   WifiOff,
   FileSpreadsheet,
   BookOpen,
   Calendar,
   HelpCircle,
-  User,
   LogOut,
   Hospital,
   AlertTriangle,
   Cloud,
-  Zap
+  CheckCircle2,
+  Shield,
+  AlertCircle
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -30,6 +30,7 @@ interface HeaderProps {
   onOpenHelp: () => void;
   onOpenPrint: () => void;
   onOpenSyncModal: () => void;
+  onOpenAdmin?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -37,12 +38,23 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenCalendar,
   onOpenHelp,
   onOpenPrint,
-  onOpenSyncModal
+  onOpenSyncModal,
+  onOpenAdmin
 }) => {
-  const { syncStatus, exportSelectedToExcel, activePatient } = usePatients();
-  const { currentUser, isGuest, logout } = useAuth();
+  const {
+    syncStatus,
+    lastSyncTime,
+    lastSyncError,
+    refreshFromCloud,
+    exportSelectedToExcel,
+    remoteUpdateToast,
+    dismissRemoteUpdateToast
+  } = usePatients();
+
+  const { currentUser, isAdmin, logout } = useAuth();
   const [witaTimeString, setWitaTimeString] = useState<string>(formatWitaClock());
   const [currentShift, setCurrentShift] = useState(getCurrentShift());
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Running digital WITA clock
   useEffect(() => {
@@ -54,21 +66,62 @@ export const Header: React.FC<HeaderProps> = ({
     return () => clearInterval(timer);
   }, []);
 
+  const handleRefreshClick = async () => {
+    setIsRefreshing(true);
+    try {
+      await refreshFromCloud();
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 500);
+    }
+  };
+
   return (
-    <header className="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-40 shadow-sm">
+    <header className="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-40 shadow-sm font-sans">
       {/* Hospital Privacy & Safety Warning Ribbon */}
       <div className="bg-amber-500/10 border-b border-amber-500/20 px-3 py-1 text-xs text-amber-300 flex items-center justify-between">
         <div className="flex items-center gap-1.5 overflow-hidden text-ellipsis whitespace-nowrap">
-          <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 text-amber-400" />
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-400" />
           <span className="font-medium">Privasi & Etika RS:</span>
           <span className="text-amber-200/90 truncate">
-            Gunakan Inisial + No. RM (jangan cantumkan nama lengkap). AsKep 3S adalah alat bantu dokumentasi klinis, verifikasi selalu oleh pembimbing/perawat primer.
+            Gunakan Inisial + No. RM. AsKep 3S adalah media dokumentasi klinis, verifikasi selalu oleh CI / perawat primer berwenang.
           </span>
         </div>
         <span className="hidden md:inline-block font-mono text-[10px] bg-amber-500/20 px-2 py-0.5 rounded text-amber-300">
           WITA (UTC+8) • KMB Doenges 3S
         </span>
       </div>
+
+      {/* Remote update notification toast banner (Conflict / Real-time multi-device) */}
+      {remoteUpdateToast && (
+        <div className="bg-teal-600 text-white px-4 py-1.5 text-xs flex items-center justify-between shadow-md animate-fadeIn">
+          <div className="flex items-center gap-2">
+            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+            <span className="font-semibold">{remoteUpdateToast}</span>
+          </div>
+          <button
+            onClick={dismissRemoteUpdateToast}
+            className="text-[11px] underline hover:text-teal-200 ml-4 cursor-pointer"
+          >
+            Tutup
+          </button>
+        </div>
+      )}
+
+      {/* Write Error Banner (if any) */}
+      {lastSyncError && (
+        <div className="bg-rose-950/90 border-b border-rose-800 text-rose-200 px-4 py-1 text-xs flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+            <span className="font-medium">Status Sinkronisasi: {lastSyncError}</span>
+          </div>
+          <button
+            onClick={handleRefreshClick}
+            className="text-[11px] font-bold text-rose-300 underline hover:text-white ml-2 cursor-pointer"
+          >
+            Coba Sinkron Ulang
+          </button>
+        </div>
+      )}
 
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
         {/* Brand & Digital WITA Clock */}
@@ -85,7 +138,7 @@ export const Header: React.FC<HeaderProps> = ({
                 SDKI • SLKI • SIKI
               </span>
             </div>
-            
+
             {/* Running Digital WITA Clock */}
             <div className="flex items-center gap-1.5 text-xs text-slate-300 font-mono mt-0.5">
               <Clock className="w-3.5 h-3.5 text-teal-400 animate-pulse" />
@@ -99,36 +152,58 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right Action Icons & Sync Indicator */}
         <div className="flex items-center gap-2">
-          {/* Real-time Sync Status & Multi-Device Button */}
-          <button
-            onClick={onOpenSyncModal}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-              !isGuest && currentUser
-                ? 'bg-emerald-950/70 border-emerald-700/80 text-emerald-300 hover:bg-emerald-900/80'
-                : 'bg-amber-950/80 border-amber-500/80 text-amber-200 hover:bg-amber-900 animate-pulse shadow-sm shadow-amber-500/20'
-            }`}
-            title="Klik untuk Sinkronisasi Multi-Device (HP & Laptop)"
-          >
-            {!isGuest && currentUser ? (
-              <>
-                <Cloud className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="hidden sm:inline">Cloud Sinkron</span>
-                <span className="text-[10px] bg-emerald-800/80 text-emerald-200 px-1.5 py-0.2 rounded font-mono">
-                  {currentUser.email?.split('@')[0] || 'Aktif'}
-                </span>
-              </>
-            ) : (
-              <>
-                <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                <span className="font-bold">Sinkronkan 2 HP/Laptop</span>
-              </>
+          {/* Sync Status Badge */}
+          <div className="flex items-center gap-1 bg-slate-800/90 border border-slate-700 px-2.5 py-1.5 rounded-xl text-xs">
+            {syncStatus === 'saved' && (
+              <span className="flex items-center gap-1 text-emerald-400 font-medium">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="hidden sm:inline">Tersimpan ✓</span>
+                <span className="text-[10px] text-slate-400 font-mono">({lastSyncTime})</span>
+              </span>
             )}
-          </button>
+
+            {syncStatus === 'saving' && (
+              <span className="flex items-center gap-1 text-amber-300 font-medium">
+                <RefreshCw className="w-3.5 h-3.5 text-amber-400 animate-spin" />
+                <span>Menyimpan…</span>
+              </span>
+            )}
+
+            {syncStatus === 'offline' && (
+              <span className="flex items-center gap-1 text-rose-300 font-medium">
+                <WifiOff className="w-3.5 h-3.5 text-rose-400" />
+                <span>Offline — akan disinkronkan</span>
+              </span>
+            )}
+
+            {/* Reload from cloud button */}
+            <button
+              type="button"
+              onClick={handleRefreshClick}
+              disabled={isRefreshing}
+              className="ml-1 p-0.5 text-slate-400 hover:text-teal-300 transition-colors cursor-pointer"
+              title="Muat ulang dari cloud"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-teal-400' : ''}`} />
+            </button>
+          </div>
+
+          {/* Admin Panel Button (only if admin NIM) */}
+          {isAdmin && onOpenAdmin && (
+            <button
+              onClick={onOpenAdmin}
+              className="flex items-center gap-1.5 bg-amber-950/80 hover:bg-amber-900/90 text-amber-300 border border-amber-600/70 text-xs font-bold px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+              title="Panel Admin: Kelola Allowlist NIM Resmi"
+            >
+              <Shield className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden md:inline">Admin Allowlist</span>
+            </button>
+          )}
 
           {/* Quick Buttons */}
           <button
             onClick={exportSelectedToExcel}
-            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg transition-colors shadow-sm"
+            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg transition-colors shadow-sm cursor-pointer"
             title="Ekspor Data Pasien ke File Excel (.xlsx)"
           >
             <FileSpreadsheet className="w-4 h-4" />
@@ -137,7 +212,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           <button
             onClick={onOpenCalendar}
-            className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg border border-slate-700 transition-colors"
+            className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg border border-slate-700 transition-colors cursor-pointer"
             title="Buka Kalender Jadwal Shift & SOAP"
           >
             <Calendar className="w-4 h-4 text-sky-400" />
@@ -146,7 +221,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           <button
             onClick={onOpenCatalog}
-            className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg border border-slate-700 transition-colors"
+            className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg border border-slate-700 transition-colors cursor-pointer"
             title="Katalog Lengkap Standar 3S PPNI"
           >
             <BookOpen className="w-4 h-4 text-amber-400" />
@@ -155,30 +230,26 @@ export const Header: React.FC<HeaderProps> = ({
 
           <button
             onClick={onOpenHelp}
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
             title="Panduan Deployment & Cloud Setup"
           >
             <HelpCircle className="w-5 h-5 text-slate-300" />
           </button>
 
-          {/* User profile / Logout */}
-          <div className="flex items-center pl-1 border-l border-slate-800 ml-1">
-            <button
-              onClick={onOpenSyncModal}
-              className="hidden xl:block text-right mr-2 hover:opacity-80 transition-opacity text-left cursor-pointer"
-              title="Kelola Akun & Sinkronisasi"
-            >
-              <p className="text-xs font-bold text-white truncate max-w-[130px]">
-                {currentUser?.displayName || 'Ners Mahasiswa'}
+          {/* User profile & NIM / Logout */}
+          <div className="flex items-center pl-2 border-l border-slate-800 ml-1">
+            <div className="text-right mr-2 text-left hidden sm:block">
+              <p className="text-xs font-bold text-white truncate max-w-[140px]">
+                {currentUser?.displayName || 'Mahasiswa Ners'}
               </p>
-              <p className="text-[10px] text-teal-400 font-mono truncate max-w-[130px]">
-                {currentUser?.nim || 'KMB Profesi'}
+              <p className="text-[10px] text-teal-400 font-mono font-bold truncate max-w-[140px]">
+                {currentUser?.nim ? `NIM ${currentUser.nim}` : 'KMB Profesi'}
               </p>
-            </button>
+            </div>
             <button
               onClick={logout}
-              className="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800 transition-colors"
-              title="Ganti Sesi / Keluar"
+              className="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+              title="Keluar dari Akun NIM"
             >
               <LogOut className="w-4 h-4" />
             </button>

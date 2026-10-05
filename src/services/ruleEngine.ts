@@ -72,6 +72,12 @@ export function generateAnalisaData(patient: Patient): DiagnosticCandidate[] {
   const lowHb = labs.some(l => l.testName.toLowerCase().includes('hemoglobin') && l.flag === 'low');
   const highGds = labs.some(l => l.testName.toLowerCase().includes('glukosa') && l.flag === 'high');
 
+  // Parse vital signs for numeric thresholds safely
+  const hr = Number(ttv.heartRate) || 0;
+  const systolic = Number(ttv.bloodPressureSystolic) || 0;
+  const temp = Number(String(ttv.temperature).replace(',', '.')) || 0;
+  const rr = Number(ttv.respiratoryRate) || 0;
+
   // Evaluate each catalog diagnosis
   for (const cat of ALL_CATALOG_3S) {
     let matchScore = 0;
@@ -87,7 +93,7 @@ export function generateAnalisaData(patient: Patient): DiagnosticCandidate[] {
         reasons.push(`Skala nyeri terukur ${pain.severityScale}/10 (P: ${pain.palliativeProvocative || '-'}, Q: ${pain.quality || '-'})`);
         dsQuotes.push(`Pasien mengeluh nyeri pada ${pain.regionRadiating || 'area terdampak'} dengan skala ${pain.severityScale}/10 (${pain.quality || 'seperti tertusuk/berdenyut'})`);
       }
-      if (fullObjStr.includes('meringis') || fullObjStr.includes('protektif') || ttv.heartRate > 100 || ttv.bloodPressureSystolic >= 140) {
+      if (fullObjStr.includes('meringis') || fullObjStr.includes('protektif') || hr > 100 || systolic >= 140) {
         matchScore += 40;
         reasons.push('Tampak ekspresi meringis, bersikap protektif, atau perubahan TTV terkait nyeri');
         doQuotes.push(`Tampak meringis menahan nyeri, bersikap protektif, TD: ${ttv.bloodPressureSystolic}/${ttv.bloodPressureDiastolic} mmHg, Nadi: ${ttv.heartRate} x/mnt`);
@@ -125,7 +131,7 @@ export function generateAnalisaData(patient: Patient): DiagnosticCandidate[] {
       }
     } else if (cat.code === 'D.0142') {
       // Risiko Infeksi
-      if (highLeukosit || fullObjStr.includes('luka') || fullObjStr.includes('infus') || fullObjStr.includes('kateter') || ttv.temperature >= 37.5) {
+      if (highLeukosit || fullObjStr.includes('luka') || fullObjStr.includes('infus') || fullObjStr.includes('kateter') || temp >= 37.5) {
         matchScore += 75;
         if (highLeukosit) reasons.push('Peningkatan kadar leukosit darah di atas rentang normal');
         reasons.push('Adanya portal masuk kuman (luka terbuka, akses intravena / kateter, prosedur invasif)');
@@ -151,7 +157,7 @@ export function generateAnalisaData(patient: Patient): DiagnosticCandidate[] {
       }
     } else if (cat.code === 'D.0005') {
       // Pola Napas Tidak Efektif
-      if (ttv.respiratoryRate > 24 || ttv.respiratoryRate < 14 || fullSubStr.includes('sesak') || fullObjStr.includes('retraksi') || fullObjStr.includes('cuping hidung')) {
+      if (rr > 24 || rr < 14 || fullSubStr.includes('sesak') || fullObjStr.includes('retraksi') || fullObjStr.includes('cuping hidung')) {
         matchScore += 70;
         reasons.push(`Frekuensi nafas abnormal (${ttv.respiratoryRate} x/mnt) dan penggunaan otot bantu napas`);
         dsQuotes.push('Pasien mengeluh sesak napas terutama saat bergerak atau berbaring datar');
@@ -168,7 +174,7 @@ export function generateAnalisaData(patient: Patient): DiagnosticCandidate[] {
       }
     } else if (cat.code === 'D.0130') {
       // Hipertermia
-      if (ttv.temperature > 37.5) {
+      if (temp > 37.5) {
         matchScore += 85;
         reasons.push(`Suhu tubuh febris (${ttv.temperature} °C)`);
         dsQuotes.push('Pasien mengeluh badan terasa panas dan meriang');
