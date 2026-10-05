@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Patient,
   CarePlan,
@@ -15,6 +15,7 @@ import {
   DiagnosticData
 } from '../types/askep';
 import { SEED_PATIENT, SEED_CAREPLAN } from '../data/seedData';
+import { generateAnalisaData } from '../services/ruleEngine';
 import { exportPatientsToExcel } from '../services/excelExport';
 import { useAuth } from './AuthContext';
 import { db, handleFirestoreError, OperationType } from '../services/firebase';
@@ -391,10 +392,23 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
         if (Object.keys(cloudCarePlans).length > 0) {
           setCarePlans(cloudCarePlans);
+          try {
+            localStorage.setItem(`askep_careplans_${currentUser.id}`, JSON.stringify(cloudCarePlans));
+          } catch {
+            // ignore
+          }
         }
       },
       error => {
         console.error('Firestore CarePlans onSnapshot error:', error);
+        try {
+          const cachedCpStr = localStorage.getItem(`askep_careplans_${currentUser.id}`);
+          if (cachedCpStr) {
+            setCarePlans(JSON.parse(cachedCpStr));
+          }
+        } catch {
+          // ignore
+        }
       }
     );
 
@@ -405,7 +419,38 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [currentUser?.id]);
 
   const activePatient = patients.find(p => p.id === activePatientId) || patients[0] || null;
-  const activeCarePlan = activePatient ? carePlans[activePatient.id] || null : null;
+
+  const activeCarePlan: CarePlan | null = useMemo(() => {
+    if (!activePatient) return null;
+    const existing = carePlans[activePatient.id];
+    if (existing) {
+      if (!existing.candidates || existing.candidates.length === 0) {
+        const autoCandidates = generateAnalisaData(activePatient);
+        if (autoCandidates.length > 0) {
+          return {
+            ...existing,
+            candidates: autoCandidates
+          };
+        }
+      }
+      return existing;
+    }
+    // Fallback: create default CarePlan for patient so Stage 2 is NEVER blank
+    const autoCandidates = generateAnalisaData(activePatient);
+    return {
+      id: `cp_${activePatient.id}`,
+      patientId: activePatient.id,
+      ownerId: currentUser?.id || activePatient.ownerId || 'unassigned',
+      candidates: autoCandidates,
+      diagnoses: activePatient.id === SEED_PATIENT.id ? SEED_CAREPLAN.diagnoses : [],
+      implementations: activePatient.id === SEED_PATIENT.id ? SEED_CAREPLAN.implementations : [],
+      evaluations: activePatient.id === SEED_PATIENT.id ? SEED_CAREPLAN.evaluations : [],
+      createdAt: activePatient.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      deviceId: CURRENT_DEVICE_ID,
+      updatedBy: currentUser?.displayName || currentUser?.nim || 'Ners'
+    };
+  }, [activePatient, carePlans, currentUser]);
 
   // -------------------------------------------------------------
   // Data Mutation: Save Patient (Granular Merge + Metadata)
@@ -477,10 +522,18 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
       deviceId: CURRENT_DEVICE_ID
     };
 
-    setCarePlans(prev => ({
-      ...prev,
-      [carePlanWithMetadata.patientId]: carePlanWithMetadata
-    }));
+    setCarePlans(prev => {
+      const updated = {
+        ...prev,
+        [carePlanWithMetadata.patientId]: carePlanWithMetadata
+      };
+      try {
+        localStorage.setItem(`askep_careplans_${currentUser.id}`, JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
+      return updated;
+    });
 
     pendingCarePlanSave.current = carePlanWithMetadata;
 
@@ -515,6 +568,26 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
       });
       list.sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
       setPatients(list);
+
+      // Also reload care plans from cloud
+      const qCp = query(collection(db, 'carePlans'), where('ownerId', '==', currentUser.id));
+      const snapCp = await getDocs(qCp);
+      const cpMap: Record<string, CarePlan> = {};
+      snapCp.forEach(d => {
+        const cp = d.data() as CarePlan;
+        if (cp.deleted !== true) {
+          cpMap[cp.patientId] = cp;
+        }
+      });
+      if (Object.keys(cpMap).length > 0) {
+        setCarePlans(cpMap);
+        try {
+          localStorage.setItem(`askep_careplans_${currentUser.id}`, JSON.stringify(cpMap));
+        } catch {
+          // ignore
+        }
+      }
+
       setSyncStatus('saved');
       setLastSyncTime(formatWitaClock());
       setLastSyncError(null);
@@ -763,7 +836,7 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
       id: `cp_${id}`,
       patientId: id,
       ownerId: currentUser?.id || 'unassigned',
-      candidates: [],
+      candidates: generateAnalisaData(newPatient),
       diagnoses: [],
       implementations: [],
       evaluations: [],
@@ -775,10 +848,18 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     // Immediate optimistic state update
     setPatients(prev => [newPatient, ...prev.filter(p => p.id !== newPatient.id)]);
-    setCarePlans(prev => ({
-      ...prev,
-      [newCarePlan.patientId]: newCarePlan
-    }));
+    setCarePlans(prev => {
+      const updated = {
+        ...prev,
+        [newCarePlan.patientId]: newCarePlan
+      };
+      try {
+        localStorage.setItem(`askep_careplans_${currentUser?.id}`, JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
+      return updated;
+    });
     setActivePatientId(id);
     setActiveStage(1);
     setCurrentFormStep(1);

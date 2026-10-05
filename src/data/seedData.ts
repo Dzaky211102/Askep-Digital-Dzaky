@@ -5,6 +5,7 @@
 
 import { Patient, CarePlan } from '../types/askep';
 import { formatWitaDateInput, formatWitaDateTimeInput } from '../utils/witaTime';
+import { generateAnalisaData } from '../services/ruleEngine';
 
 export const SEED_PATIENT_ID = 'patient_tn_j_sample';
 export const SEED_CAREPLAN_ID = 'careplan_tn_j_sample';
@@ -251,7 +252,7 @@ export const SEED_CAREPLAN: CarePlan = {
   id: SEED_CAREPLAN_ID,
   patientId: SEED_PATIENT_ID,
   ownerId: 'default_nurse',
-  candidates: [],
+  candidates: generateAnalisaData(SEED_PATIENT),
   diagnoses: [
     {
       id: 'dx_1',

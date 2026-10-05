@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { usePatients } from '../../context/PatientContext';
 import { generateAnalisaData } from '../../services/ruleEngine';
 import { ALL_CATALOG_3S } from '../../data/extendedCatalog';
@@ -30,24 +30,55 @@ export const AnalysisEngineView: React.FC = () => {
   const [searchCatalogTerm, setSearchCatalogTerm] = useState('');
   const [showCatalogModal, setShowCatalogModal] = useState(false);
 
-  if (!activePatient || !activeCarePlan) return null;
+  // Auto-persist generated candidates if empty
+  useEffect(() => {
+    if (activePatient && activeCarePlan && (!activeCarePlan.candidates || activeCarePlan.candidates.length === 0)) {
+      const generated = generateAnalisaData(activePatient);
+      if (generated && generated.length > 0) {
+        saveCarePlan({
+          ...activeCarePlan,
+          candidates: generated
+        });
+      }
+    }
+  }, [activePatient?.id, activeCarePlan?.id]);
 
-  const candidates = activeCarePlan.candidates || [];
+  if (!activePatient) {
+    return (
+      <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-500 font-sans">
+        Pilih atau tambahkan pasien untuk menampilkan analisa data.
+      </div>
+    );
+  }
+
+  // Fallback: candidates are ALWAYS available and never empty
+  const candidates: DiagnosticCandidate[] =
+    activeCarePlan?.candidates && activeCarePlan.candidates.length > 0
+      ? activeCarePlan.candidates
+      : generateAnalisaData(activePatient);
 
   // Generate / Run Rule Engine
   const handleRunRuleEngine = () => {
     setIsGenerating(true);
     setTimeout(() => {
-      const generated = generateAnalisaData(activePatient);
-      saveCarePlan({
-        ...activeCarePlan,
-        candidates: generated
-      });
-      setIsGenerating(false);
+      try {
+        const generated = generateAnalisaData(activePatient);
+        if (activeCarePlan) {
+          saveCarePlan({
+            ...activeCarePlan,
+            candidates: generated
+          });
+        }
+      } catch (err) {
+        console.error('Error generating analisa data:', err);
+      } finally {
+        setIsGenerating(false);
+      }
     }, 400);
   };
 
   const handleToggleCandidate = (id: string) => {
+    if (!activeCarePlan) return;
     const updated = candidates.map(c => (c.id === id ? { ...c, selected: !c.selected } : c));
     saveCarePlan({
       ...activeCarePlan,
@@ -56,6 +87,7 @@ export const AnalysisEngineView: React.FC = () => {
   };
 
   const handleMoveCandidate = (index: number, direction: 'up' | 'down') => {
+    if (!activeCarePlan) return;
     const newIdx = direction === 'up' ? index - 1 : index + 1;
     if (newIdx < 0 || newIdx >= candidates.length) return;
 
@@ -75,6 +107,7 @@ export const AnalysisEngineView: React.FC = () => {
   };
 
   const handleUpdateCandidate = (id: string, updates: Partial<DiagnosticCandidate>) => {
+    if (!activeCarePlan) return;
     const updated = candidates.map(c => (c.id === id ? { ...c, ...updates } : c));
     saveCarePlan({
       ...activeCarePlan,
@@ -83,6 +116,7 @@ export const AnalysisEngineView: React.FC = () => {
   };
 
   const handleDeleteCandidate = (id: string) => {
+    if (!activeCarePlan) return;
     const updated = candidates.filter(c => c.id !== id);
     updated.forEach((c, idx) => {
       c.priorityOrder = idx + 1;
@@ -95,6 +129,7 @@ export const AnalysisEngineView: React.FC = () => {
 
   // Add manual diagnosis from 3S Catalog
   const handleAddManualFromCatalog = (catItem: (typeof ALL_CATALOG_3S)[0]) => {
+    if (!activeCarePlan) return;
     let pes = '';
     if (catItem.type === 'aktual') {
       pes = `${catItem.name} (${catItem.code}) b.d. ${catItem.causes[0] || 'Kondisi klinis'} d.d. ${catItem.majorSubjective.concat(catItem.majorObjective).slice(0, 2).join(', ') || 'tanda dan gejala klinis'}`;
@@ -130,13 +165,14 @@ export const AnalysisEngineView: React.FC = () => {
 
   // Apply selected candidates to active care plan diagnoses
   const handleApplyToCarePlan = () => {
+    if (!activeCarePlan) return;
     const selected = candidates.filter(c => c.selected);
     if (selected.length === 0) {
       alert('Pilih minimal satu diagnosa kandidat yang bercentang untuk diterapkan ke rencana asuhan.');
       return;
     }
 
-    const existingDxMap = new Map(activeCarePlan.diagnoses.map(d => [d.sdkCode, d]));
+    const existingDxMap = new Map((activeCarePlan.diagnoses || []).map(d => [d.sdkCode, d]));
 
     const mappedDiagnoses: NursingDiagnosisCarePlan[] = selected.map((cand, idx) => {
       const existing = existingDxMap.get(cand.sdkCode);
