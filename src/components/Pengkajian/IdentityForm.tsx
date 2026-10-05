@@ -99,10 +99,15 @@ export const IdentityForm: React.FC = () => {
               Umur (Tahun)
             </label>
             <input
-              type="number"
-              value={identity.age}
-              onChange={e => handleChange('age', Number(e.target.value))}
-              className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:outline-hidden"
+              type="text"
+              inputMode="numeric"
+              value={identity.age === 0 || identity.age === undefined ? '' : identity.age}
+              onFocus={e => e.target.select()}
+              onChange={e => {
+                const cleaned = e.target.value.replace(/[^0-9]/g, '').replace(/^0+/, '');
+                handleChange('age', cleaned === '' ? '' : Number(cleaned));
+              }}
+              className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:outline-hidden text-slate-900"
               placeholder="34"
             />
           </div>
@@ -143,11 +148,19 @@ export const IdentityForm: React.FC = () => {
             </label>
             <input
               type="text"
-              value={activePatient.room}
+              value={activePatient.room || ''}
               onChange={e => {
-                savePatient({ ...activePatient, room: e.target.value });
+                const newRoom = e.target.value;
+                savePatient({
+                  ...activePatient,
+                  room: newRoom,
+                  cover: {
+                    ...activePatient.cover,
+                    room: newRoom
+                  }
+                });
               }}
-              className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:outline-hidden"
+              className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:outline-hidden text-slate-900"
               placeholder="e.g. Teratai Bed 02"
             />
           </div>

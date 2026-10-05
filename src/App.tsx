@@ -27,6 +27,7 @@ import { CatalogBrowserModal } from './components/CatalogBrowserModal';
 import { CalendarView } from './components/CalendarView';
 import { PrintReportModal } from './components/PrintReportModal';
 import { HelpDeploymentModal } from './components/HelpDeploymentModal';
+import { AuthSyncModal } from './components/AuthSyncModal';
 import { ShieldCheck, HeartHandshake } from 'lucide-react';
 
 const MainAppContent: React.FC = () => {
@@ -38,6 +39,7 @@ const MainAppContent: React.FC = () => {
   const [calendarModalOpen, setCalendarModalOpen] = useState(false);
   const [printModalOpen, setPrintModalOpen] = useState(false);
   const [helpModalOpen, setHelpModalOpen] = useState(false);
+  const [syncModalOpen, setSyncModalOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans">
@@ -47,6 +49,7 @@ const MainAppContent: React.FC = () => {
         onOpenCalendar={() => setCalendarModalOpen(true)}
         onOpenHelp={() => setHelpModalOpen(true)}
         onOpenPrint={() => setPrintModalOpen(true)}
+        onOpenSyncModal={() => setSyncModalOpen(true)}
       />
 
       {/* Main 6-Stage Stepper Navigation */}
@@ -141,6 +144,11 @@ const MainAppContent: React.FC = () => {
       <HelpDeploymentModal
         isOpen={helpModalOpen}
         onClose={() => setHelpModalOpen(false)}
+      />
+
+      <AuthSyncModal
+        isOpen={syncModalOpen}
+        onClose={() => setSyncModalOpen(false)}
       />
     </div>
   );

@@ -115,6 +115,21 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
           if (cloudPatients.length > 0) {
             setPatients(cloudPatients);
             localStorage.setItem('askep_patients_db', JSON.stringify(cloudPatients));
+            setActivePatientId(prev => {
+              if (prev && cloudPatients.some(p => p.id === prev)) return prev;
+              return cloudPatients[0].id;
+            });
+          } else {
+            // First time login on this account: push local patients to cloud with ownerId = currentUser.id
+            const currentList = patients.length > 0 ? patients : [SEED_PATIENT];
+            currentList.forEach(async p => {
+              const cloudP = { ...p, ownerId: currentUser.id };
+              try {
+                await setDoc(doc(db, 'patients', cloudP.id), cloudP);
+              } catch (e) {
+                console.warn('Auto-seed cloud patient error:', e);
+              }
+            });
           }
           setSyncStatus('saved');
         },
@@ -136,6 +151,17 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
           if (Object.keys(cloudCarePlans).length > 0) {
             setCarePlans(prev => ({ ...prev, ...cloudCarePlans }));
             localStorage.setItem('askep_careplans_db', JSON.stringify({ ...carePlans, ...cloudCarePlans }));
+          } else {
+            // Auto-seed cloud care plans
+            const currentPlans = Object.keys(carePlans).length > 0 ? carePlans : { [SEED_PATIENT.id]: SEED_CAREPLAN };
+            Object.values(currentPlans).forEach(async cp => {
+              const cloudCp = { ...cp, ownerId: currentUser.id };
+              try {
+                await setDoc(doc(db, 'carePlans', cloudCp.id), cloudCp);
+              } catch (e) {
+                console.warn('Auto-seed cloud care plan error:', e);
+              }
+            });
           }
           setSyncStatus('saved');
         },
@@ -162,10 +188,17 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const savePatient = async (updatedPatient: Patient) => {
     setSyncStatus('saving');
     
-    // Update local state immediately
-    const newPatients = patients.some(p => p.id === updatedPatient.id)
-      ? patients.map(p => (p.id === updatedPatient.id ? updatedPatient : p))
-      : [updatedPatient, ...patients];
+    // Ensure patient belongs to authenticated user if signed in
+    const patientWithUser: Patient = {
+      ...updatedPatient,
+      ownerId: currentUser && !isGuest ? currentUser.id : updatedPatient.ownerId,
+      updatedAt: new Date().toISOString()
+    };
+
+    // Update local state immediately for zero-latency UI
+    const newPatients = patients.some(p => p.id === patientWithUser.id)
+      ? patients.map(p => (p.id === patientWithUser.id ? patientWithUser : p))
+      : [patientWithUser, ...patients];
 
     setPatients(newPatients);
     localStorage.setItem('askep_patients_db', JSON.stringify(newPatients));
@@ -175,25 +208,31 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
     saveDebounceTimeout.current = setTimeout(async () => {
       if (currentUser && !isGuest) {
         try {
-          await setDoc(doc(db, 'patients', updatedPatient.id), updatedPatient);
+          await setDoc(doc(db, 'patients', patientWithUser.id), patientWithUser);
           setSyncStatus('saved');
         } catch (err) {
-          handleFirestoreError(err, OperationType.WRITE, `patients/${updatedPatient.id}`);
+          handleFirestoreError(err, OperationType.WRITE, `patients/${patientWithUser.id}`);
           setSyncStatus('offline');
         }
       } else {
         setSyncStatus('saved');
       }
-    }, 600);
+    }, 400);
   };
 
   // Save care plan with local cache + debounced cloud sync
   const saveCarePlan = async (updatedCarePlan: CarePlan) => {
     setSyncStatus('saving');
 
+    const carePlanWithUser: CarePlan = {
+      ...updatedCarePlan,
+      ownerId: currentUser && !isGuest ? currentUser.id : updatedCarePlan.ownerId,
+      updatedAt: new Date().toISOString()
+    };
+
     const newCarePlans = {
       ...carePlans,
-      [updatedCarePlan.patientId]: updatedCarePlan
+      [carePlanWithUser.patientId]: carePlanWithUser
     };
 
     setCarePlans(newCarePlans);
@@ -204,16 +243,16 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
     saveDebounceTimeout.current = setTimeout(async () => {
       if (currentUser && !isGuest) {
         try {
-          await setDoc(doc(db, 'carePlans', updatedCarePlan.id), updatedCarePlan);
+          await setDoc(doc(db, 'carePlans', carePlanWithUser.id), carePlanWithUser);
           setSyncStatus('saved');
         } catch (err) {
-          handleFirestoreError(err, OperationType.WRITE, `carePlans/${updatedCarePlan.id}`);
+          handleFirestoreError(err, OperationType.WRITE, `carePlans/${carePlanWithUser.id}`);
           setSyncStatus('offline');
         }
       } else {
         setSyncStatus('saved');
       }
-    }, 600);
+    }, 400);
   };
 
   const createNewPatient = (): Patient => {

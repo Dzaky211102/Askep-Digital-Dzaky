@@ -128,19 +128,105 @@ export const DomainAssessmentForm: React.FC = () => {
   const pain = domains.painAssessment;
   const morse = domains.morseFallScale;
 
-  const handleTtvChange = (field: keyof VitalSigns, value: any) => {
-    const updatedTtv = { ...ttv, [field]: value };
-    // Recalculate GCS total
-    if (field === 'gcsEye' || field === 'gcsVerbal' || field === 'gcsMotor') {
-      updatedTtv.gcsTotal = Number(updatedTtv.gcsEye) + Number(updatedTtv.gcsVerbal) + Number(updatedTtv.gcsMotor);
+  // Helper to parse string with comma/dot to numeric float
+  const parseClinicalNumber = (val: string | number | undefined): number => {
+    if (val === undefined || val === null || val === '') return 0;
+    if (typeof val === 'number') return val;
+    const normalized = String(val).replace(',', '.').trim();
+    const parsed = parseFloat(normalized);
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
+  // Helper to format display value so empty or 0 doesn't force a stuck leading "0"
+  const getDisplayValue = (val: string | number | undefined): string => {
+    if (val === undefined || val === null || val === '') return '';
+    if (val === 0 || val === '0') return '';
+    return String(val);
+  };
+
+  // Sanitize integer inputs (TD, Nadi, RR, SpO2) - desimalnya di-nolkan dan hilangkan leading zero
+  const sanitizeIntegerInput = (raw: string): string => {
+    if (!raw) return '';
+    // Strip everything from first dot or comma onwards (desimalnya di-nolkan)
+    const intOnly = raw.split(/[.,]/)[0];
+    let cleaned = intOnly.replace(/[^0-9]/g, '');
+    // Strip leading zeroes e.g. "0120" -> "120"
+    if (/^0+[1-9]/.test(cleaned)) {
+      cleaned = cleaned.replace(/^0+/, '');
+    } else if (/^0+$/.test(cleaned)) {
+      cleaned = '0';
     }
-    // Recalculate BMI
-    if (field === 'weightKg' || field === 'heightCm') {
-      const hM = Number(updatedTtv.heightCm) / 100;
-      if (hM > 0) {
-        updatedTtv.bmi = parseFloat((Number(updatedTtv.weightKg) / (hM * hM)).toFixed(1));
+    return cleaned;
+  };
+
+  // Sanitize decimal inputs (Suhu, BB, TB) - mendukung titik dan koma tanpa stuck leading 0
+  const sanitizeDecimalInput = (raw: string): string => {
+    if (!raw) return '';
+    // Allow digits, dot, comma
+    let cleaned = raw.replace(/[^0-9.,]/g, '');
+
+    // If starts with separator (e.g. ".5" or ",5") -> "0.5" or "0,5"
+    if (cleaned.startsWith('.') || cleaned.startsWith(',')) {
+      cleaned = '0' + cleaned;
+    }
+
+    // Strip redundant leading zeroes before a non-zero digit, e.g. "036.5" -> "36.5", "01" -> "1"
+    if (/^0+[1-9]/.test(cleaned)) {
+      cleaned = cleaned.replace(/^0+/, '');
+    }
+
+    // Keep only the first decimal separator (either dot or comma)
+    const firstSepIndex = cleaned.search(/[.,]/);
+    if (firstSepIndex !== -1) {
+      const sep = cleaned[firstSepIndex];
+      const before = cleaned.slice(0, firstSepIndex);
+      const after = cleaned.slice(firstSepIndex + 1).replace(/[.,]/g, '');
+      cleaned = before + sep + after;
+    }
+
+    return cleaned;
+  };
+
+  const integerTtvFields: (keyof VitalSigns)[] = [
+    'bloodPressureSystolic',
+    'bloodPressureDiastolic',
+    'heartRate',
+    'respiratoryRate',
+    'spO2'
+  ];
+
+  const handleTtvChange = (field: keyof VitalSigns, rawValue: any) => {
+    let cleanVal = rawValue;
+    if (typeof rawValue === 'string') {
+      if (integerTtvFields.includes(field)) {
+        cleanVal = sanitizeIntegerInput(rawValue);
+      } else {
+        cleanVal = sanitizeDecimalInput(rawValue);
       }
     }
+
+    const updatedTtv = { ...ttv, [field]: cleanVal };
+
+    // Recalculate GCS total
+    if (field === 'gcsEye' || field === 'gcsVerbal' || field === 'gcsMotor') {
+      updatedTtv.gcsTotal =
+        (Number(updatedTtv.gcsEye) || 0) +
+        (Number(updatedTtv.gcsVerbal) || 0) +
+        (Number(updatedTtv.gcsMotor) || 0);
+    }
+
+    // Recalculate BMI automatically if height and weight are provided
+    if (field === 'weightKg' || field === 'heightCm') {
+      const wKg = parseClinicalNumber(updatedTtv.weightKg);
+      const hCm = parseClinicalNumber(updatedTtv.heightCm);
+      const hM = hCm / 100;
+      if (hM > 0 && wKg > 0) {
+        updatedTtv.bmi = parseFloat((wKg / (hM * hM)).toFixed(1));
+      } else {
+        updatedTtv.bmi = '';
+      }
+    }
+
     savePatient({
       ...activePatient,
       domains: {
@@ -264,13 +350,16 @@ export const DomainAssessmentForm: React.FC = () => {
           <span>Tanda-Tanda Vital (TTV) & Status Kesadaran (GCS)</span>
         </h4>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 text-xs">
           <div>
             <label className="block font-medium text-slate-600 mb-1">TD Sistolik (mmHg)</label>
             <input
-              type="number"
-              value={ttv.bloodPressureSystolic}
-              onChange={e => handleTtvChange('bloodPressureSystolic', Number(e.target.value))}
+              type="text"
+              inputMode="numeric"
+              value={getDisplayValue(ttv.bloodPressureSystolic)}
+              onFocus={e => e.target.select()}
+              onChange={e => handleTtvChange('bloodPressureSystolic', e.target.value)}
+              placeholder="120"
               className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-bold text-slate-900"
             />
           </div>
@@ -278,9 +367,12 @@ export const DomainAssessmentForm: React.FC = () => {
           <div>
             <label className="block font-medium text-slate-600 mb-1">TD Diastolik (mmHg)</label>
             <input
-              type="number"
-              value={ttv.bloodPressureDiastolic}
-              onChange={e => handleTtvChange('bloodPressureDiastolic', Number(e.target.value))}
+              type="text"
+              inputMode="numeric"
+              value={getDisplayValue(ttv.bloodPressureDiastolic)}
+              onFocus={e => e.target.select()}
+              onChange={e => handleTtvChange('bloodPressureDiastolic', e.target.value)}
+              placeholder="80"
               className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-bold text-slate-900"
             />
           </div>
@@ -288,11 +380,16 @@ export const DomainAssessmentForm: React.FC = () => {
           <div>
             <label className="block font-medium text-slate-600 mb-1">Frekuensi Nadi (x/m)</label>
             <input
-              type="number"
-              value={ttv.heartRate}
-              onChange={e => handleTtvChange('heartRate', Number(e.target.value))}
+              type="text"
+              inputMode="numeric"
+              value={getDisplayValue(ttv.heartRate)}
+              onFocus={e => e.target.select()}
+              onChange={e => handleTtvChange('heartRate', e.target.value)}
+              placeholder="80"
               className={`w-full px-2.5 py-1.5 bg-white border rounded-xl font-bold ${
-                ttv.heartRate > 100 || ttv.heartRate < 60 ? 'border-amber-400 text-amber-700' : 'border-slate-300 text-slate-900'
+                parseClinicalNumber(ttv.heartRate) > 100 || (parseClinicalNumber(ttv.heartRate) > 0 && parseClinicalNumber(ttv.heartRate) < 60)
+                  ? 'border-amber-400 text-amber-700'
+                  : 'border-slate-300 text-slate-900'
               }`}
             />
           </div>
@@ -300,11 +397,16 @@ export const DomainAssessmentForm: React.FC = () => {
           <div>
             <label className="block font-medium text-slate-600 mb-1">Pernapasan RR (x/m)</label>
             <input
-              type="number"
-              value={ttv.respiratoryRate}
-              onChange={e => handleTtvChange('respiratoryRate', Number(e.target.value))}
+              type="text"
+              inputMode="numeric"
+              value={getDisplayValue(ttv.respiratoryRate)}
+              onFocus={e => e.target.select()}
+              onChange={e => handleTtvChange('respiratoryRate', e.target.value)}
+              placeholder="20"
               className={`w-full px-2.5 py-1.5 bg-white border rounded-xl font-bold ${
-                ttv.respiratoryRate > 24 ? 'border-amber-400 text-amber-700' : 'border-slate-300 text-slate-900'
+                parseClinicalNumber(ttv.respiratoryRate) > 24
+                  ? 'border-amber-400 text-amber-700'
+                  : 'border-slate-300 text-slate-900'
               }`}
             />
           </div>
@@ -312,12 +414,16 @@ export const DomainAssessmentForm: React.FC = () => {
           <div>
             <label className="block font-medium text-slate-600 mb-1">Suhu Tubuh (°C)</label>
             <input
-              type="number"
-              step="0.1"
-              value={ttv.temperature}
-              onChange={e => handleTtvChange('temperature', Number(e.target.value))}
+              type="text"
+              inputMode="decimal"
+              value={getDisplayValue(ttv.temperature)}
+              onFocus={e => e.target.select()}
+              onChange={e => handleTtvChange('temperature', e.target.value)}
+              placeholder="36.5"
               className={`w-full px-2.5 py-1.5 bg-white border rounded-xl font-bold ${
-                ttv.temperature > 37.5 ? 'border-rose-400 text-rose-700' : 'border-slate-300 text-slate-900'
+                parseClinicalNumber(ttv.temperature) > 37.5
+                  ? 'border-rose-400 text-rose-700'
+                  : 'border-slate-300 text-slate-900'
               }`}
             />
           </div>
@@ -325,10 +431,39 @@ export const DomainAssessmentForm: React.FC = () => {
           <div>
             <label className="block font-medium text-slate-600 mb-1">SpO2 (%)</label>
             <input
-              type="number"
-              value={ttv.spO2}
-              onChange={e => handleTtvChange('spO2', Number(e.target.value))}
+              type="text"
+              inputMode="numeric"
+              value={getDisplayValue(ttv.spO2)}
+              onFocus={e => e.target.select()}
+              onChange={e => handleTtvChange('spO2', e.target.value)}
+              placeholder="98"
               className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-bold text-teal-700"
+            />
+          </div>
+
+          <div>
+            <label className="block font-medium text-slate-600 mb-1">BB (kg)</label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={getDisplayValue(ttv.weightKg)}
+              onFocus={e => e.target.select()}
+              onChange={e => handleTtvChange('weightKg', e.target.value)}
+              placeholder="60"
+              className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-bold text-slate-800"
+            />
+          </div>
+
+          <div>
+            <label className="block font-medium text-slate-600 mb-1">TB (cm)</label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={getDisplayValue(ttv.heightCm)}
+              onFocus={e => e.target.select()}
+              onChange={e => handleTtvChange('heightCm', e.target.value)}
+              placeholder="165"
+              className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-bold text-slate-800"
             />
           </div>
         </div>
@@ -698,18 +833,22 @@ export const DomainAssessmentForm: React.FC = () => {
                       <div>
                         <label className="block font-medium text-slate-600 mb-1">Intake Cairan 24 Jam (mL)</label>
                         <input
-                          type="number"
-                          value={currentDomain.fluidIntakeMl || 0}
+                          type="text"
+                          inputMode="numeric"
+                          value={getDisplayValue(currentDomain.fluidIntakeMl)}
+                          onFocus={e => e.target.select()}
+                          placeholder="e.g. 1500"
                           onChange={e => {
-                            const inMl = Number(e.target.value);
-                            const outMl = currentDomain.fluidOutputMl || 0;
+                            const inClean = sanitizeIntegerInput(e.target.value);
+                            const inMl = parseClinicalNumber(inClean);
+                            const outMl = parseClinicalNumber(currentDomain.fluidOutputMl);
                             savePatient({
                               ...activePatient,
                               domains: {
                                 ...domains,
                                 makananCairan: {
                                   ...domains.makananCairan,
-                                  fluidIntakeMl: inMl,
+                                  fluidIntakeMl: inClean,
                                   fluidBalanceMl: inMl - outMl
                                 }
                               }
@@ -721,18 +860,22 @@ export const DomainAssessmentForm: React.FC = () => {
                       <div>
                         <label className="block font-medium text-slate-600 mb-1">Output Cairan / Urin (mL)</label>
                         <input
-                          type="number"
-                          value={currentDomain.fluidOutputMl || 0}
+                          type="text"
+                          inputMode="numeric"
+                          value={getDisplayValue(currentDomain.fluidOutputMl)}
+                          onFocus={e => e.target.select()}
+                          placeholder="e.g. 1400"
                           onChange={e => {
-                            const outMl = Number(e.target.value);
-                            const inMl = currentDomain.fluidIntakeMl || 0;
+                            const outClean = sanitizeIntegerInput(e.target.value);
+                            const outMl = parseClinicalNumber(outClean);
+                            const inMl = parseClinicalNumber(currentDomain.fluidIntakeMl);
                             savePatient({
                               ...activePatient,
                               domains: {
                                 ...domains,
                                 makananCairan: {
                                   ...domains.makananCairan,
-                                  fluidOutputMl: outMl,
+                                  fluidOutputMl: outClean,
                                   fluidBalanceMl: inMl - outMl
                                 }
                               }

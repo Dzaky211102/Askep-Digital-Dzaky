@@ -69,19 +69,19 @@ export interface PatientHistory {
 }
 
 export interface VitalSigns {
-  bloodPressureSystolic: number;
-  bloodPressureDiastolic: number;
-  heartRate: number; // Nadi bpm
-  respiratoryRate: number; // RR x/mnt
-  temperature: number; // Suhu C
-  spO2: number; // %
+  bloodPressureSystolic: number | string;
+  bloodPressureDiastolic: number | string;
+  heartRate: number | string; // Nadi bpm
+  respiratoryRate: number | string; // RR x/mnt
+  temperature: number | string; // Suhu C (mendukung titik/koma)
+  spO2: number | string; // %
   gcsEye: number; // 1-4
   gcsVerbal: number; // 1-5
   gcsMotor: number; // 1-6
   gcsTotal: number; // 3-15
-  weightKg: number;
-  heightCm: number;
-  bmi: number;
+  weightKg: number | string;
+  heightCm: number | string;
+  bmi: number | string;
   consciousness: 'Compos Mentis' | 'Apatis' | 'Somnolen' | 'Sopor' | 'Coma';
 }
 
@@ -134,9 +134,9 @@ export interface DomainAssessment {
     findings: string[];
     subjective: string;
     objective: string;
-    fluidIntakeMl: number;
-    fluidOutputMl: number;
-    fluidBalanceMl: number;
+    fluidIntakeMl: number | string;
+    fluidOutputMl: number | string;
+    fluidBalanceMl: number | string;
   };
   eliminasi: {
     findings: string[];

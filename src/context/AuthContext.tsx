@@ -22,6 +22,7 @@ interface AuthContextType {
   loginWithGoogle: () => Promise<void>;
   loginWithEmail: (email: string, pass: string) => Promise<void>;
   registerWithEmail: (email: string, pass: string, name: string) => Promise<void>;
+  loginWithDemoAccount: (email?: string, pass?: string) => Promise<void>;
   loginAsGuest: (nurseName?: string) => void;
   logout: () => Promise<void>;
 }
@@ -131,6 +132,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const loginWithDemoAccount = async (
+    demoEmail = '2411102411163@umkt.ac.id',
+    demoPass = 'NersKMB2026!'
+  ) => {
+    setLoading(true);
+    try {
+      try {
+        const res = await signInWithEmailAndPassword(auth, demoEmail, demoPass);
+        setCurrentUser({
+          id: res.user.uid,
+          email: res.user.email || demoEmail,
+          displayName: 'Ners. Rahmat Hidayat, S.Kep',
+          nim: '2411102411163',
+          institution: 'Universitas Muhammadiyah Kalimantan Timur'
+        });
+        setIsGuest(false);
+        localStorage.removeItem('askep_guest_user');
+      } catch (err: any) {
+        // If account doesn't exist, create it once so both devices can share it
+        if (
+          err?.code === 'auth/user-not-found' ||
+          err?.code === 'auth/invalid-credential' ||
+          err?.code === 'auth/invalid-login-credentials'
+        ) {
+          const res = await createUserWithEmailAndPassword(auth, demoEmail, demoPass);
+          setCurrentUser({
+            id: res.user.uid,
+            email: res.user.email || demoEmail,
+            displayName: 'Ners. Rahmat Hidayat, S.Kep',
+            nim: '2411102411163',
+            institution: 'Universitas Muhammadiyah Kalimantan Timur'
+          });
+          setIsGuest(false);
+          localStorage.removeItem('askep_guest_user');
+        } else {
+          throw err;
+        }
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const loginAsGuest = (nurseName: string = 'Ners. Rahmat Hidayat, S.Kep') => {
     const guest: UserProfile = {
       id: 'nurse_guest_' + Date.now(),
@@ -163,6 +207,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loginWithGoogle,
         loginWithEmail,
         registerWithEmail,
+        loginWithDemoAccount,
         loginAsGuest,
         logout
       }}

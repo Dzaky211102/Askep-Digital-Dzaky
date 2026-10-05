@@ -19,7 +19,9 @@ import {
   User,
   LogOut,
   Hospital,
-  AlertTriangle
+  AlertTriangle,
+  Cloud,
+  Zap
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -27,13 +29,15 @@ interface HeaderProps {
   onOpenCalendar: () => void;
   onOpenHelp: () => void;
   onOpenPrint: () => void;
+  onOpenSyncModal: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   onOpenCatalog,
   onOpenCalendar,
   onOpenHelp,
-  onOpenPrint
+  onOpenPrint,
+  onOpenSyncModal
 }) => {
   const { syncStatus, exportSelectedToExcel, activePatient } = usePatients();
   const { currentUser, isGuest, logout } = useAuth();
@@ -95,27 +99,31 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right Action Icons & Sync Indicator */}
         <div className="flex items-center gap-2">
-          {/* Real-time Sync Status Badge */}
-          <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border bg-slate-800/80 border-slate-700">
-            {syncStatus === 'saved' && (
+          {/* Real-time Sync Status & Multi-Device Button */}
+          <button
+            onClick={onOpenSyncModal}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+              !isGuest && currentUser
+                ? 'bg-emerald-950/70 border-emerald-700/80 text-emerald-300 hover:bg-emerald-900/80'
+                : 'bg-amber-950/80 border-amber-500/80 text-amber-200 hover:bg-amber-900 animate-pulse shadow-sm shadow-amber-500/20'
+            }`}
+            title="Klik untuk Sinkronisasi Multi-Device (HP & Laptop)"
+          >
+            {!isGuest && currentUser ? (
               <>
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping opacity-75" />
-                <span className="text-emerald-300">Tersimpan di Cloud</span>
+                <Cloud className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="hidden sm:inline">Cloud Sinkron</span>
+                <span className="text-[10px] bg-emerald-800/80 text-emerald-200 px-1.5 py-0.2 rounded font-mono">
+                  {currentUser.email?.split('@')[0] || 'Aktif'}
+                </span>
+              </>
+            ) : (
+              <>
+                <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                <span className="font-bold">Sinkronkan 2 HP/Laptop</span>
               </>
             )}
-            {syncStatus === 'saving' && (
-              <>
-                <RefreshCw className="w-3.5 h-3.5 text-sky-400 animate-spin" />
-                <span className="text-sky-300">Menyinkronkan...</span>
-              </>
-            )}
-            {syncStatus === 'offline' && (
-              <>
-                <WifiOff className="w-3.5 h-3.5 text-amber-400" />
-                <span className="text-amber-300">Mode Lokal (Offline)</span>
-              </>
-            )}
-          </div>
+          </button>
 
           {/* Quick Buttons */}
           <button
@@ -155,14 +163,18 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* User profile / Logout */}
           <div className="flex items-center pl-1 border-l border-slate-800 ml-1">
-            <div className="hidden xl:block text-right mr-2">
+            <button
+              onClick={onOpenSyncModal}
+              className="hidden xl:block text-right mr-2 hover:opacity-80 transition-opacity text-left cursor-pointer"
+              title="Kelola Akun & Sinkronisasi"
+            >
               <p className="text-xs font-bold text-white truncate max-w-[130px]">
                 {currentUser?.displayName || 'Ners Mahasiswa'}
               </p>
               <p className="text-[10px] text-teal-400 font-mono truncate max-w-[130px]">
                 {currentUser?.nim || 'KMB Profesi'}
               </p>
-            </div>
+            </button>
             <button
               onClick={logout}
               className="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800 transition-colors"

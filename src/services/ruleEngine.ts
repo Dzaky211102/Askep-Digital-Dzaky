@@ -30,6 +30,8 @@ export function generateAnalisaData(patient: Patient): DiagnosticCandidate[] {
   const pex = patient.physicalExam;
   const labs = patient.diagnostics.laboratories;
 
+  const parseNum = (v: any) => parseFloat(String(v || 0).replace(',', '.')) || 0;
+
   // Aggregate subjective & objective text pools from 13 domains
   const subjectivePool: { domain: string; text: string }[] = [];
   const objectivePool: { domain: string; text: string }[] = [];

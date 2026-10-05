@@ -14,17 +14,20 @@ export const CoverForm: React.FC = () => {
   if (!activePatient) return null;
 
   const cover = activePatient.cover;
+  const currentRoom = cover.room !== undefined ? cover.room : (activePatient.room || '');
 
   const handleChange = (field: keyof PatientCover, value: string) => {
     const updatedCover = { ...cover, [field]: value };
     savePatient({
       ...activePatient,
-      cover: updatedCover
+      cover: updatedCover,
+      room: field === 'room' ? value : activePatient.room
     });
   };
 
   const handleGenerateTitle = () => {
-    const autoTitle = `Asuhan Keperawatan pada ${activePatient.initials} dengan Masalah ${activePatient.medicalDiagnosis || 'Fraktur'} di Ruang ${activePatient.room || 'Bedah'} ${cover.hospital || 'RSUD'}`;
+    const activeRoom = cover.room || activePatient.room || 'Bedah';
+    const autoTitle = `Asuhan Keperawatan pada ${activePatient.initials} dengan Masalah ${activePatient.medicalDiagnosis || 'Fraktur'} di Ruang ${activeRoom} ${cover.hospital || 'RSUD'}`;
     handleChange('title', autoTitle);
   };
 
@@ -88,12 +91,11 @@ export const CoverForm: React.FC = () => {
             </label>
             <input
               type="text"
-              value={cover.room}
-              onChange={e => {
-                handleChange('room', e.target.value);
-                savePatient({ ...activePatient, room: e.target.value });
-              }}
-              className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:outline-hidden"
+              id="cover-room"
+              name="cover-room"
+              value={currentRoom}
+              onChange={e => handleChange('room', e.target.value)}
+              className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:outline-hidden text-slate-900"
               placeholder="e.g. Ruang Teratai (Bedah Orthopedi)"
             />
           </div>
