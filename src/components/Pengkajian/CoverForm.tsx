@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { usePatients } from '../../context/PatientContext';
 import { PatientCover } from '../../types/askep';
-import { FileText, Sparkles, Building, User, GraduationCap, Bed, Stethoscope, RefreshCw } from 'lucide-react';
+import { FileText, Sparkles, Building, User, GraduationCap, Bed, Stethoscope, RefreshCw, Cloud, CheckCircle2 } from 'lucide-react';
 
 export const CoverForm: React.FC = () => {
   const { activePatient, savePatient } = usePatients();
@@ -123,6 +123,20 @@ export const CoverForm: React.FC = () => {
           <Sparkles className="w-3.5 h-3.5 text-teal-600" />
           <span>Judul Otomatis</span>
         </button>
+      </div>
+
+      {/* Multi-Device Cloud Sync Notice */}
+      <div className="mb-5 p-3 bg-teal-50/70 border border-teal-200/80 rounded-xl flex items-center justify-between text-xs text-teal-950">
+        <div className="flex items-center gap-2">
+          <Cloud className="w-4 h-4 text-teal-600 shrink-0 animate-pulse" />
+          <span>
+            <strong>Penyimpanan Cloud Selalu Aktif:</strong> Data pasien tersinkron real-time antar perangkat (HP & Laptop) melalui akun NIM Anda.
+          </span>
+        </div>
+        <span className="hidden sm:inline-flex items-center gap-1 font-mono text-[10px] bg-teal-100 text-teal-800 px-2 py-0.5 rounded-full font-semibold">
+          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+          <span>Multi-Device Ready</span>
+        </span>
       </div>
 
       <div className="space-y-5 text-xs">

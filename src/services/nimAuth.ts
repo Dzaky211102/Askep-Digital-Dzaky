@@ -46,6 +46,15 @@ export function getNimEmail(nim: string): string {
 }
 
 /**
+ * Deterministic stable UID derived from NIM.
+ * Guaranteed 100% identical on laptop, phone, or any device!
+ */
+export function getNimUid(nim: string): string {
+  const clean = sanitizeNim(nim);
+  return `askep_nim_${clean}`;
+}
+
+/**
  * Deterministic credentials derived from NIM (and optional PIN)
  */
 export function getNimPassword(nim: string, pin?: string): string {
@@ -128,16 +137,27 @@ export async function checkNimInAllowlist(rawNim: string): Promise<{
   const clean = sanitizeNim(rawNim);
   if (!clean) return { isAllowed: false };
 
+  // Helper to check local registration status if offline
+  const getLocalRegistered = (n: string): boolean => {
+    try {
+      const regList: string[] = JSON.parse(localStorage.getItem('askep_registered_nims') || '[]');
+      return regList.includes(n);
+    } catch {
+      return false;
+    }
+  };
+
   try {
     const docRef = doc(db, 'allowed_nims', clean);
     const snap = await getDoc(docRef);
     if (snap.exists()) {
       const data = snap.data() as AllowedNimRecord;
+      const isReg = data.registered || getLocalRegistered(clean);
       return {
         isAllowed: true,
         record: data,
         name: data.name,
-        isRegistered: data.registered
+        isRegistered: isReg
       };
     }
   } catch (err) {
@@ -147,16 +167,17 @@ export async function checkNimInAllowlist(rawNim: string): Promise<{
   // Check fallback list
   const found = INITIAL_OFFICIAL_NIMS.find(s => s.nim === clean);
   if (found) {
+    const isReg = getLocalRegistered(clean);
     return {
       isAllowed: true,
       record: {
         nim: found.nim,
         name: found.name,
-        registered: false,
+        registered: isReg,
         createdAt: new Date().toISOString()
       },
       name: found.name,
-      isRegistered: false
+      isRegistered: isReg
     };
   }
 
@@ -168,6 +189,16 @@ export async function checkNimInAllowlist(rawNim: string): Promise<{
  */
 export async function markNimRegistered(nim: string): Promise<void> {
   const clean = sanitizeNim(nim);
+  try {
+    const regList: string[] = JSON.parse(localStorage.getItem('askep_registered_nims') || '[]');
+    if (!regList.includes(clean)) {
+      regList.push(clean);
+      localStorage.setItem('askep_registered_nims', JSON.stringify(regList));
+    }
+  } catch (e) {
+    // ignore
+  }
+
   try {
     const docRef = doc(db, 'allowed_nims', clean);
     await updateDoc(docRef, {

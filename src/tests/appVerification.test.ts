@@ -11,6 +11,7 @@ import {
 import {
   sanitizeNim,
   getNimEmail,
+  getNimUid,
   getNimPassword,
   INITIAL_OFFICIAL_NIMS,
   ADMIN_NIM
@@ -146,6 +147,11 @@ const email1 = getNimEmail('2511102412185');
 const email2 = getNimEmail(' 2511102412185 ');
 assertEqual(email1, '2511102412185@askep.local', 'Format email sintetis NIM konsisten');
 assertEqual(email1, email2, 'Trim spasi menghasilkan email yang identik');
+
+const uid1 = getNimUid('2511102412185');
+const uid2 = getNimUid(' 251-110-2412185 ');
+assertEqual(uid1, 'askep_nim_2511102412185', 'Format UID stabil askep_nim_<nim>');
+assertEqual(uid1, uid2, 'UID deterministik identik di HP dan Laptop');
 
 // Password deterministik
 const pass1 = getNimPassword('2511102412185');

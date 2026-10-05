@@ -313,7 +313,37 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
       error => {
         console.error('Firestore Patients onSnapshot error:', error);
         setSyncStatus('offline');
-        setLastSyncError('Koneksi terputus — data disimpan secara offline.');
+        setLastSyncError('Koneksi cloud terputus — data tersimpan secara lokal dan akan disinkronkan.');
+
+        // Fallback to local offline cache so patient list is never blank!
+        try {
+          const cached = localStorage.getItem(`askep_patients_${currentUser.id}`);
+          if (cached) {
+            const parsed: Patient[] = JSON.parse(cached);
+            if (parsed.length > 0) {
+              setPatients(parsed);
+              setActivePatientId(parsed[0].id);
+            }
+          } else {
+            const initPatient: Patient = {
+              ...SEED_PATIENT,
+              ownerId: currentUser.id,
+              cover: {
+                ...SEED_PATIENT.cover,
+                studentName: currentUser.displayName,
+                studentNim: currentUser.nim || ''
+              },
+              deviceId: CURRENT_DEVICE_ID,
+              updatedBy: currentUser.displayName,
+              updatedAt: new Date().toISOString()
+            };
+            setPatients([initPatient]);
+            setActivePatientId(initPatient.id);
+            localStorage.setItem(`askep_patients_${currentUser.id}`, JSON.stringify([initPatient]));
+          }
+        } catch {
+          // ignore
+        }
       }
     );
 
@@ -371,12 +401,19 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
     // Immediate optimistic update in React state
     setPatients(prev => {
       const idx = prev.findIndex(p => p.id === patientWithMetadata.id);
+      let updated: Patient[];
       if (idx !== -1) {
-        const updated = [...prev];
+        updated = [...prev];
         updated[idx] = patientWithMetadata;
-        return updated;
+      } else {
+        updated = [patientWithMetadata, ...prev];
       }
-      return [patientWithMetadata, ...prev];
+      try {
+        localStorage.setItem(`askep_patients_${currentUser.id}`, JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
+      return updated;
     });
 
     // Store in pending ref for flush

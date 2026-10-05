@@ -153,33 +153,40 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Right Action Icons & Sync Indicator */}
         <div className="flex items-center gap-2">
           {/* Sync Status Badge */}
-          <div className="flex items-center gap-1 bg-slate-800/90 border border-slate-700 px-2.5 py-1.5 rounded-xl text-xs">
+          <div
+            onClick={onOpenSyncModal}
+            className="flex items-center gap-1.5 bg-slate-800/90 hover:bg-slate-800 border border-slate-700 hover:border-teal-500/50 px-2.5 py-1.5 rounded-xl text-xs cursor-pointer transition-colors"
+            title="Klik untuk membuka Pengaturan Sinkronisasi Cloud Multi-Perangkat"
+          >
             {syncStatus === 'saved' && (
-              <span className="flex items-center gap-1 text-emerald-400 font-medium">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="hidden sm:inline">Tersimpan ✓</span>
+              <span className="flex items-center gap-1.5 text-emerald-400 font-medium">
+                <Cloud className="w-3.5 h-3.5 text-teal-400" />
+                <span className="hidden sm:inline">Cloud Aktif ✓</span>
                 <span className="text-[10px] text-slate-400 font-mono">({lastSyncTime})</span>
               </span>
             )}
 
             {syncStatus === 'saving' && (
-              <span className="flex items-center gap-1 text-amber-300 font-medium">
+              <span className="flex items-center gap-1.5 text-amber-300 font-medium">
                 <RefreshCw className="w-3.5 h-3.5 text-amber-400 animate-spin" />
-                <span>Menyimpan…</span>
+                <span>Menyimpan ke Cloud…</span>
               </span>
             )}
 
             {syncStatus === 'offline' && (
-              <span className="flex items-center gap-1 text-rose-300 font-medium">
+              <span className="flex items-center gap-1.5 text-rose-300 font-medium">
                 <WifiOff className="w-3.5 h-3.5 text-rose-400" />
-                <span>Offline — akan disinkronkan</span>
+                <span>Offline — cache lokal aktif</span>
               </span>
             )}
 
             {/* Reload from cloud button */}
             <button
               type="button"
-              onClick={handleRefreshClick}
+              onClick={e => {
+                e.stopPropagation();
+                handleRefreshClick();
+              }}
               disabled={isRefreshing}
               className="ml-1 p-0.5 text-slate-400 hover:text-teal-300 transition-colors cursor-pointer"
               title="Muat ulang dari cloud"

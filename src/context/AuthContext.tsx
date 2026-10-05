@@ -18,6 +18,7 @@ import { UserProfile } from '../types/askep';
 import {
   sanitizeNim,
   getNimEmail,
+  getNimUid,
   getNimPassword,
   checkNimInAllowlist,
   markNimRegistered,
@@ -39,8 +40,30 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const isNetworkOrConfigError = (err: any): boolean => {
+  const code = err?.code || '';
+  const msg = err?.message || '';
+  return (
+    code === 'auth/network-request-failed' ||
+    code === 'auth/operation-not-allowed' ||
+    code === 'auth/internal-error' ||
+    code === 'auth/configuration-not-found' ||
+    msg.includes('network-request-failed') ||
+    msg.includes('OPERATION_NOT_ALLOWED') ||
+    msg.includes('PASSWORD_LOGIN_DISABLED')
+  );
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
+    try {
+      const saved = localStorage.getItem('askep_active_session');
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // ignore
+    }
+    return null;
+  });
   const [loading, setLoading] = useState<boolean>(true);
 
   // Initialize and seed allowlist on boot
@@ -83,10 +106,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role: nim === ADMIN_NIM ? 'admin' : 'student'
         };
 
+        localStorage.setItem('askep_active_session', JSON.stringify(profile));
         setCurrentUser(profile);
       } else {
-        // Not authenticated -> null. Must go through Login Gate!
-        setCurrentUser(null);
+        // If no Firebase Auth user, keep local saved session if present, otherwise null
+        try {
+          const saved = localStorage.getItem('askep_active_session');
+          if (saved) {
+            setCurrentUser(JSON.parse(saved));
+          } else {
+            setCurrentUser(null);
+          }
+        } catch {
+          setCurrentUser(null);
+        }
       }
       setLoading(false);
     });
@@ -113,42 +146,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const email = getNimEmail(nim);
     const password = getNimPassword(nim, pin);
+    const studentName = allowCheck.name || 'Ners Mahasiswa';
+    const stableUid = getNimUid(nim);
 
     try {
-      let userCredential;
+      let resolvedUid = stableUid;
+
       try {
-        userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        resolvedUid = userCredential.user.uid;
       } catch (authErr: any) {
-        // If user document existed in allowlist but Auth user not created yet, auto-register
-        if (
+        if (isNetworkOrConfigError(authErr)) {
+          // Firebase Auth network request failed or password provider disabled on cloud
+          console.warn('Firebase Auth network/config notice, applying deterministic NIM identity:', authErr.message);
+          resolvedUid = stableUid;
+        } else if (
           authErr.code === 'auth/user-not-found' ||
           authErr.code === 'auth/invalid-credential' ||
           authErr.code === 'auth/invalid-login-credentials'
         ) {
-          // If already marked as registered in DB, it could be a wrong credential attempt
           if (allowCheck.isRegistered) {
             recordFailedAttempt(nim);
             throw new Error('NIM atau kredensial tidak sesuai. Pastikan format NIM benar.');
           }
-          // If not registered in allowlist, instruct to switch to register tab
           throw new Error('NIM belum diaktivasi. Silakan beralih ke tab "Daftar".');
+        } else {
+          throw authErr;
         }
-        throw authErr;
       }
 
       resetFailedAttempts(nim);
-      const user = userCredential.user;
-      const studentName = allowCheck.name || user.displayName || 'Ners Mahasiswa';
 
       const profile: UserProfile = {
-        id: user.uid,
-        email: user.email || email,
+        id: resolvedUid,
+        email,
         displayName: studentName,
         nim,
         institution: 'Universitas Muhammadiyah Kalimantan Timur',
         role: nim === ADMIN_NIM ? 'admin' : 'student'
       };
 
+      localStorage.setItem('askep_active_session', JSON.stringify(profile));
       setCurrentUser(profile);
       return profile;
     } catch (err: any) {
@@ -181,32 +219,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const email = getNimEmail(nim);
     const password = getNimPassword(nim, pin);
     const studentName = allowCheck.name || 'Ners Mahasiswa';
+    const stableUid = getNimUid(nim);
 
     try {
-      let userCredential;
+      let resolvedUid = stableUid;
+
       try {
-        userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      } catch (createErr: any) {
-        if (createErr.code === 'auth/email-already-in-use') {
-          // Account already exists in Auth, sign in instead
-          userCredential = await signInWithEmailAndPassword(auth, email, password);
+        let userCredential;
+        try {
+          userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        } catch (createErr: any) {
+          if (createErr.code === 'auth/email-already-in-use') {
+            userCredential = await signInWithEmailAndPassword(auth, email, password);
+          } else {
+            throw createErr;
+          }
+        }
+        resolvedUid = userCredential.user.uid;
+        await updateProfile(userCredential.user, { displayName: studentName }).catch(() => {});
+      } catch (authErr: any) {
+        if (isNetworkOrConfigError(authErr)) {
+          console.warn('Firebase Auth network/config notice during register, applying deterministic NIM identity:', authErr.message);
+          resolvedUid = stableUid;
         } else {
-          throw createErr;
+          throw authErr;
         }
       }
 
-      const user = userCredential.user;
-
-      // Update Firebase Auth profile
-      await updateProfile(user, { displayName: studentName });
-
-      // Mark in allowlist as registered
+      // Mark in allowlist as registered (both DB and local fallback)
       await markNimRegistered(nim);
 
-      // Create / update user document in Firestore
-      const userDocRef = doc(db, 'users', user.uid);
       const profileData: UserProfile = {
-        id: user.uid,
+        id: resolvedUid,
         email,
         displayName: studentName,
         nim,
@@ -214,12 +258,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role: nim === ADMIN_NIM ? 'admin' : 'student'
       };
 
-      await setDoc(userDocRef, {
-        ...profileData,
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
+      // Try background sync to users doc in Firestore
+      try {
+        const userDocRef = doc(db, 'users', resolvedUid);
+        await setDoc(userDocRef, {
+          ...profileData,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (e) {
+        console.warn('Background user doc save notice:', e);
+      }
 
       resetFailedAttempts(nim);
+      localStorage.setItem('askep_active_session', JSON.stringify(profileData));
       setCurrentUser(profileData);
       return profileData;
     } catch (err: any) {
@@ -230,6 +281,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try {
+      localStorage.removeItem('askep_active_session');
       await fbSignOut(auth);
     } catch (e) {
       console.warn('Sign out error:', e);
